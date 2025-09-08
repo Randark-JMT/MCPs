@@ -58,6 +58,7 @@ npm run deploy
 ```
 
 **示例用法**:
+
 - `dns_lookup({"domain": "google.com"})`
 - `dns_lookup({"domain": "example.com", "type": "MX"})`
 - `dns_lookup({"domain": "cloudflare.com", "type": "AAAA", "timeout": 1000})`
@@ -75,6 +76,7 @@ npm run deploy
 ```
 
 **示例用法**:
+
 - `dns_debug({"domain": "problematic-domain.com"})`
 - `dns_debug({"domain": "example.com", "type": "TXT", "timeout": 5000})`
 
@@ -124,7 +126,7 @@ npm run deploy
 
 ### Cloudflare AI Playground
 
-1. 访问 https://playground.ai.cloudflare.com/
+1. 访问 <https://playground.ai.cloudflare.com/>
 2. 输入您的 MCP 服务器 URL: `your-doh-server.your-account.workers.dev/sse`
 3. 开始使用 DNS 查询工具！
 
@@ -156,24 +158,29 @@ npm run deploy
 ## 🛠️ API 端点
 
 ### Web 界面
+
 - `GET /` - 主页面（Web 查询界面）
 - `GET /debug` - 调试页面（同主页面）
 
 ### MCP 协议端点
+
 - `POST /sse` - MCP SSE 连接
 - `GET /sse` - MCP SSE 初始化
 - `POST /mcp` - MCP HTTP 协议
 
 ### REST API 端点
+
 - `POST /api/dns/lookup` - DNS 查询 API
 - `POST /api/dns/debug` - DNS 调试 API
 
 ### 传统端点
+
 - `GET /dns-query` - 传统 DoH 查询接口（兼容性）
 
 ### REST API 使用示例
 
 #### DNS 查询 API
+
 ```bash
 curl -X POST https://your-worker.workers.dev/api/dns/lookup \
   -H "Content-Type: application/json" \
@@ -181,6 +188,7 @@ curl -X POST https://your-worker.workers.dev/api/dns/lookup \
 ```
 
 #### DNS 调试 API  
+
 ```bash
 curl -X POST https://your-worker.workers.dev/api/dns/debug \
   -H "Content-Type: application/json" \
@@ -190,18 +198,21 @@ curl -X POST https://your-worker.workers.dev/api/dns/debug \
 ## 🏗️ 架构特点
 
 ### 智能共识算法
+
 - 并行查询多个 DoH 服务器
 - 统计答案一致性
 - 选择共识度最高的结果
 - 优选响应时间最快的服务器
 
 ### 容错机制
+
 - 500ms 默认超时保护
 - 自动跳过失败的服务器
 - 详细的错误信息记录
 - 优雅的降级处理
 
 ### 现代化开发
+
 - TypeScript 完整类型支持
 - Biome 代码格式化和检查
 - Cloudflare Workers 边缘计算
@@ -210,12 +221,14 @@ curl -X POST https://your-worker.workers.dev/api/dns/debug \
 ## 🔧 配置选项
 
 ### 超时时间建议
+
 - **快速查询**: 100-500ms
 - **标准查询**: 500-1000ms  
 - **调试模式**: 2000-5000ms
 - **网络不佳**: 5000-10000ms
 
 ### 性能优化
+
 - 使用较短超时时间提高响应速度
 - 调试模式使用较长超时获取完整信息
 - 根据网络环境调整超时参数
@@ -223,7 +236,8 @@ curl -X POST https://your-worker.workers.dev/api/dns/debug \
 ## 📝 开发说明
 
 ### 项目结构
-```
+
+```plaintext
 doh-worker/
 ├── src/
 │   └── index.ts              # 主要业务逻辑
@@ -236,12 +250,14 @@ doh-worker/
 ```
 
 ### 添加新的 DNS 工具
+
 1. 在 `DoHMCP` 类的 `init()` 方法中添加新工具
 2. 使用 `this.server.tool()` 定义工具
 3. 使用 Zod 定义参数验证schema
 4. 实现异步处理函数
 
 ### 添加新的 DoH 服务器
+
 1. 在 `DOH_SERVERS` 对象中添加新服务器
 2. 确保服务器支持标准 DoH 协议
 3. 测试服务器的可用性和响应时间

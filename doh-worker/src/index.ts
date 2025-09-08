@@ -513,6 +513,7 @@ export class DoHMCP extends McpAgent {
         // DNS lookup tool
         this.server.tool(
             "dns_lookup",
+            "通过多个DoH服务器查询DNS记录，返回最可靠的结果。支持A、AAAA、CNAME、MX、TXT、NS、PTR、SRV、SOA等记录类型。",
             {
                 domain: z.string().describe("要查询的域名，例如：google.com, example.org"),
                 type: z
@@ -583,6 +584,7 @@ export class DoHMCP extends McpAgent {
         // DNS debug tool
         this.server.tool(
             "dns_debug",
+            "获取详细的DNS查询调试信息，显示所有DoH服务器的响应状态、时间和错误信息，用于故障排查和性能分析。",
             {
                 domain: z.string().describe("要调试的域名"),
                 type: z
@@ -663,6 +665,7 @@ export class DoHMCP extends McpAgent {
         // Get DoH servers list tool
         this.server.tool(
             "get_doh_servers",
+            "获取当前配置的所有DoH(DNS over HTTPS)服务器列表，包括国内外主流DNS提供商。",
             {},
             async () => {
                 const serverList = Object.entries(DOH_SERVERS)
@@ -683,6 +686,7 @@ export class DoHMCP extends McpAgent {
         // DNS record types information tool
         this.server.tool(
             "dns_record_types",
+            "获取支持的DNS记录类型说明和使用示例，包括A、AAAA、CNAME、MX、TXT、NS、PTR、SRV、SOA等记录的详细介绍。",
             {},
             async () => {
                 const typeInfo = `支持的DNS记录类型：
