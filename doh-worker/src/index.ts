@@ -899,6 +899,11 @@ export default {
             return this.handleDoHQuery(request);
         }
 
+        // Favicon
+        if (url.pathname === "/favicon.ico" || url.pathname === "/favicon.svg") {
+            return env.ASSETS.fetch(new Request(new URL("/favicon.svg", request.url), request));
+        }
+
         // Static assets
         if (url.pathname.startsWith("/static/") || url.pathname.endsWith(".css") || url.pathname.endsWith(".js")) {
             return env.ASSETS.fetch(request);
