@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DoH DNS 查询工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 40px;
+        }
+
+        .query-form {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            border: 1px solid #e9ecef;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 200px 150px 120px;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #495057;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            transform: none;
+            cursor: not-allowed;
+        }
+
+        .results-section {
+            margin-top: 30px;
+        }
+
+        .results-tabs {
+            display: flex;
+            border-bottom: 2px solid #e9ecef;
+            margin-bottom: 20px;
+        }
+
+        .tab-button {
+            background: none;
+            border: none;
+            padding: 15px 25px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            color: #6c757d;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .tab-button.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .result-card {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .server-name {
+            font-weight: 600;
+            color: #495057;
+            font-size: 1.1rem;
+        }
+
+        .response-time {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .error-time {
+            background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
+        }
+
+        .dns-answers {
+            display: grid;
+            gap: 10px;
+        }
+
+        .dns-answer {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .answer-data {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .answer-meta {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-weight: 600;
+            padding: 10px;
+            background: #f8d7da;
+            border-radius: 8px;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e9ecef;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid #dee2e6;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .main-content {
+                padding: 20px;
+            }
+
+            .query-form {
+                padding: 20px;
+            }
+
+            .stats {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 DoH DNS 查询工具</h1>
+            <p>基于多个公共 DNS over HTTPS 服务器的智能查询系统</p>
+        </div>
+
+        <div class="main-content">
+            <div class="query-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="domain">域名</label>
+                        <input type="text" id="domain" placeholder="例如: google.com" value="google.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="recordType">记录类型</label>
+                        <select id="recordType">
+                            <option value="A">A (IPv4)</option>
+                            <option value="AAAA">AAAA (IPv6)</option>
+                            <option value="CNAME">CNAME (别名)</option>
+                            <option value="MX">MX (邮件)</option>
+                            <option value="TXT">TXT (文本)</option>
+                            <option value="NS">NS (名称服务器)</option>
+                            <option value="PTR">PTR (反向)</option>
+                            <option value="SRV">SRV (服务)</option>
+                            <option value="SOA">SOA (授权)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="timeout">超时 (ms)</label>
+                        <input type="number" id="timeout" min="100" max="10000" value="2000">
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button class="btn" onclick="performQuery()" id="queryBtn">查询</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="results-section">
+                <div class="results-tabs">
+                    <button class="tab-button active" onclick="switchTab('summary')">查询结果</button>
+                    <button class="tab-button" onclick="switchTab('debug')">调试信息</button>
+                </div>
+
+                <div id="summary-tab" class="tab-content active">
+                    <div id="summary-results"></div>
+                </div>
+
+                <div id="debug-tab" class="tab-content">
+                    <div id="debug-results"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentQuery = null;
+
+        function switchTab(tab) {
+            // 更新标签按钮状态
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // 更新内容显示
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tab + '-tab').classList.add('active');
+        }
+
+        async function performQuery() {
+            const domain = document.getElementById('domain').value.trim();
+            const recordType = document.getElementById('recordType').value;
+            const timeout = parseInt(document.getElementById('timeout').value);
+            const queryBtn = document.getElementById('queryBtn');
+
+            if (!domain) {
+                alert('请输入域名');
+                return;
+            }
+
+            // 禁用按钮并显示加载状态
+            queryBtn.disabled = true;
+            queryBtn.textContent = '查询中...';
+
+            // 显示加载状态
+            showLoading();
+
+            try {
+                // 并发执行查询和调试请求
+                const [queryResponse, debugResponse] = await Promise.all([
+                    fetch('/api/dns/lookup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ domain, type: recordType, timeout })
+                    }),
+                    fetch('/api/dns/debug', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ domain, type: recordType, timeout })
+                    })
+                ]);
+
+                if (!queryResponse.ok) {
+                    throw new Error(`查询失败: ${queryResponse.status} ${queryResponse.statusText}`);
+                }
+
+                if (!debugResponse.ok) {
+                    throw new Error(`调试查询失败: ${debugResponse.status} ${debugResponse.statusText}`);
+                }
+
+                const queryData = await queryResponse.json();
+                const debugData = await debugResponse.json();
+
+                // 显示结果
+                displaySummaryResults(queryData);
+                displayDebugResults(debugData);
+
+            } catch (error) {
+                console.error('查询出错:', error);
+                showError(error.message);
+            } finally {
+                // 恢复按钮状态
+                queryBtn.disabled = false;
+                queryBtn.textContent = '查询';
+            }
+        }
+
+        function showLoading() {
+            const loadingHTML = '<div class="loading">正在查询 DNS 记录...</div>';
+            document.getElementById('summary-results').innerHTML = loadingHTML;
+            document.getElementById('debug-results').innerHTML = loadingHTML;
+        }
+
+        function showError(message) {
+            const errorHTML = `<div class="error-message">❌ ${message}</div>`;
+            document.getElementById('summary-results').innerHTML = errorHTML;
+            document.getElementById('debug-results').innerHTML = errorHTML;
+        }
+
+        function displaySummaryResults(data) {
+            const container = document.getElementById('summary-results');
+            
+            if (!data.success || !data.result || !data.result.answers || data.result.answers.length === 0) {
+                container.innerHTML = '<div class="error-message">❌ 没有找到 DNS 记录</div>';
+                return;
+            }
+
+            let html = `
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-number">${data.result.answers.length}</div>
+                        <div class="stat-label">DNS 记录</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${data.responseTime || 0}ms</div>
+                        <div class="stat-label">响应时间</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${data.serverName || 'Unknown'}</div>
+                        <div class="stat-label">最佳服务器</div>
+                    </div>
+                </div>
+
+                <div class="result-card">
+                    <div class="result-header">
+                        <div class="server-name">🎯 查询结果</div>
+                        <div class="response-time">${data.responseTime || 0}ms</div>
+                    </div>
+                    <div class="dns-answers">
+            `;
+
+            data.result.answers.forEach(answer => {
+                html += `
+                    <div class="dns-answer">
+                        <div class="answer-data">${answer.data}</div>
+                        <div class="answer-meta">TTL: ${answer.ttl}s | 类型: ${getRecordTypeName(answer.type)}</div>
+                    </div>
+                `;
+            });
+
+            html += '</div></div>';
+            container.innerHTML = html;
+        }
+
+        function displayDebugResults(data) {
+            const container = document.getElementById('debug-results');
+
+            if (!data.success) {
+                container.innerHTML = '<div class="error-message">❌ 调试查询失败</div>';
+                return;
+            }
+
+            const successCount = data.successfulServers || 0;
+            const failedCount = data.failedServers || 0;
+            const totalCount = data.totalServers || 0;
+
+            let html = `
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-number">${successCount}</div>
+                        <div class="stat-label">成功服务器</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${failedCount}</div>
+                        <div class="stat-label">失败服务器</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${totalCount}</div>
+                        <div class="stat-label">总计服务器</div>
+                    </div>
+                </div>
+            `;
+
+            // 显示成功的服务器
+            if (data.servers && data.servers.success) {
+                html += '<h3 style="color: #28a745; margin-bottom: 15px;">✅ 成功的服务器</h3>';
+                data.servers.success.forEach(server => {
+                    html += `
+                        <div class="result-card">
+                            <div class="result-header">
+                                <div class="server-name">${server.serverName}</div>
+                                <div class="response-time">${server.responseTime || 0}ms</div>
+                            </div>
+                    `;
+
+                    if (server.answers && server.answers.length > 0) {
+                        html += '<div class="dns-answers">';
+                        server.answers.forEach(answer => {
+                            html += `
+                                <div class="dns-answer">
+                                    <div class="answer-data">${answer.data}</div>
+                                    <div class="answer-meta">TTL: ${answer.ttl}s | 类型: ${getRecordTypeName(answer.type)}</div>
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                    } else {
+                        html += '<div class="error-message">无记录</div>';
+                    }
+
+                    html += '</div>';
+                });
+            }
+
+            // 显示失败的服务器
+            if (data.servers && data.servers.failed && data.servers.failed.length > 0) {
+                html += '<h3 style="color: #dc3545; margin-bottom: 15px; margin-top: 30px;">❌ 失败的服务器</h3>';
+                data.servers.failed.forEach(server => {
+                    html += `
+                        <div class="result-card">
+                            <div class="result-header">
+                                <div class="server-name">${server.serverName}</div>
+                                <div class="response-time error-time">${server.responseTime || 0}ms</div>
+                            </div>
+                            <div class="error-message">${server.error || '未知错误'}</div>
+                        </div>
+                    `;
+                });
+            }
+
+            container.innerHTML = html;
+        }
+
+        function getRecordTypeName(type) {
+            const types = {
+                1: 'A', 28: 'AAAA', 5: 'CNAME', 15: 'MX', 16: 'TXT',
+                2: 'NS', 12: 'PTR', 33: 'SRV', 6: 'SOA'
+            };
+            return types[type] || `Type ${type}`;
+        }
+
+        // 支持回车键查询
+        document.getElementById('domain').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performQuery();
+            }
+        });
+
+        // 页面加载完成后自动查询示例
+        window.addEventListener('load', function() {
+            // 可以在这里添加初始化逻辑
+        });
+    </script>
+</body>
+</html>
