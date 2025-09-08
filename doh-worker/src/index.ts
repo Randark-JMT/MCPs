@@ -719,11 +719,12 @@ export default {
     fetch(request: Request, env: Env, ctx: ExecutionContext) {
         const url = new URL(request.url);
 
-        // MCP endpoints
+        // MCP SSE endpoints
         if (url.pathname === "/sse" || url.pathname === "/sse/message") {
             return DoHMCP.serveSSE("/sse").fetch(request, env, ctx);
         }
 
+        // MCP HTTP endpoints
         if (url.pathname === "/mcp") {
             return DoHMCP.serve("/mcp").fetch(request, env, ctx);
         }

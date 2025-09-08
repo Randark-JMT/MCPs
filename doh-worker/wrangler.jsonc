@@ -18,7 +18,7 @@
 		"bindings": [
 			{
 				"class_name": "DoHMCP",
-				"name": "DOH_MCP_OBJECT"
+				"name": "MCP_OBJECT"
 			}
 		]
 	},
