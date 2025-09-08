@@ -56,6 +56,8 @@ interface QueryResults {
     total: number;
     consensus?: DNSAnswer[];
     bestResult?: DoHServerResponse;
+    consensusScore?: number; // 共识度分数 (0-1)
+    detailScore?: number;    // 详细度分数 (0-1)
 }
 
 // DNS query utilities
@@ -426,46 +428,147 @@ class DoHService {
         const consensus = this.findConsensus(successResults);
         const bestResult = this.getBestResult(successResults, consensus);
 
+        // 计算整体评分
+        const consensusScore = successResults.length > 0 ? 
+            (bestResult ? 1.0 : 0.5) : 0.0;
+        
+        const detailScore = consensus.length > 0 ? 
+            Math.min(consensus.length / 5, 1.0) : 0.0;
+
         return {
             success: successResults,
             failed: failedResults,
             total: Object.keys(DOH_SERVERS).length,
             consensus: consensus,
             bestResult: bestResult,
+            consensusScore: consensusScore,
+            detailScore: detailScore,
         };
     }
 
     private static findConsensus(results: DoHServerResponse[]): DNSAnswer[] {
         if (results.length === 0) return [];
 
-        // 统计相同答案的频次
-        const answerGroups = new Map<string, { answers: DNSAnswer[]; count: number }>();
+        // 数据标准化和分组
+        const answerGroups = new Map<string, { 
+            answers: DNSAnswer[]; 
+            count: number; 
+            servers: string[];
+            totalDetails: number; // 记录总的详细信息量
+        }>();
 
         results.forEach((result) => {
             if (result.answers && result.answers.length > 0) {
-                const key = result.answers
-                    .map((a) => a.data)
+                // 标准化数据：去重、排序、格式化
+                const normalizedAnswers = this.normalizeAnswers(result.answers);
+                const key = normalizedAnswers
+                    .map((a) => `${a.type}:${a.data}`)
                     .sort()
-                    .join(",");
+                    .join("|");
+                
                 if (!answerGroups.has(key)) {
-                    answerGroups.set(key, { answers: result.answers, count: 0 });
+                    answerGroups.set(key, { 
+                        answers: normalizedAnswers, 
+                        count: 0, 
+                        servers: [],
+                        totalDetails: 0
+                    });
                 }
-                answerGroups.get(key)!.count++;
+                
+                const group = answerGroups.get(key)!;
+                group.count++;
+                group.servers.push(result.serverName);
+                group.totalDetails += normalizedAnswers.length;
             }
         });
 
-        // 找到最高频次的答案
-        let maxCount = 0;
-        let consensusAnswers: DNSAnswer[] = [];
+        if (answerGroups.size === 0) return [];
 
-        for (const group of answerGroups.values()) {
-            if (group.count > maxCount) {
-                maxCount = group.count;
+        // 计算每组的综合分数：共识度 × 0.7 + 详细度 × 0.3
+        let bestScore = 0;
+        let consensusAnswers: DNSAnswer[] = [];
+        const totalResults = results.length;
+
+        for (const [key, group] of answerGroups.entries()) {
+            // 共识度：该答案被多少服务器确认 (0-1)
+            const consensusScore = group.count / totalResults;
+            
+            // 详细度：该答案包含的记录数量，标准化到0-1
+            const maxDetails = Math.max(...Array.from(answerGroups.values()).map(g => g.answers.length));
+            const detailScore = maxDetails > 0 ? group.answers.length / maxDetails : 0;
+            
+            // 综合分数：共识度权重更高
+            const combinedScore = consensusScore * 0.7 + detailScore * 0.3;
+            
+            if (combinedScore > bestScore) {
+                bestScore = combinedScore;
                 consensusAnswers = group.answers;
             }
         }
 
         return consensusAnswers;
+    }
+
+    // 数据标准化函数
+    private static normalizeAnswers(answers: DNSAnswer[]): DNSAnswer[] {
+        const normalized = answers.map(answer => ({
+            ...answer,
+            data: this.normalizeData(answer.data, answer.type)
+        }));
+
+        // 按类型和数据排序，去重
+        const unique = new Map<string, DNSAnswer>();
+        normalized.forEach(answer => {
+            const key = `${answer.type}:${answer.data}`;
+            if (!unique.has(key) || answer.ttl > (unique.get(key)?.ttl || 0)) {
+                unique.set(key, answer);
+            }
+        });
+
+        return Array.from(unique.values()).sort((a, b) => {
+            if (a.type !== b.type) return a.type - b.type;
+            return a.data.localeCompare(b.data);
+        });
+    }
+
+    // 数据格式标准化
+    private static normalizeData(data: string, type: number): string {
+        switch (type) {
+            case 1: // A记录
+                // 标准化IPv4地址格式
+                return data.trim().toLowerCase();
+            case 28: // AAAA记录
+                // 标准化IPv6地址格式，压缩零段
+                return data.trim().toLowerCase().replace(/(:0)+:/g, '::');
+            case 5: // CNAME
+            case 2: // NS
+            case 12: // PTR
+                // 域名标准化：转小写，去掉末尾点
+                return data.trim().toLowerCase().replace(/\.$/, '');
+            case 15: // MX记录
+                // 标准化MX记录格式 "priority hostname"
+                const mxParts = data.trim().split(/\s+/);
+                if (mxParts.length >= 2) {
+                    const priority = mxParts[0];
+                    const hostname = mxParts[1].toLowerCase().replace(/\.$/, '');
+                    return `${priority} ${hostname}`;
+                }
+                return data.trim().toLowerCase();
+            case 16: // TXT记录
+                // TXT记录去掉引号，标准化空格
+                return data.trim().replace(/^["']|["']$/g, '').replace(/\s+/g, ' ');
+            case 33: // SRV记录
+                // 标准化SRV记录格式 "priority weight port target"
+                const srvParts = data.trim().split(/\s+/);
+                if (srvParts.length >= 4) {
+                    const [priority, weight, port] = srvParts;
+                    const target = srvParts.slice(3).join(' ').toLowerCase().replace(/\.$/, '');
+                    return `${priority} ${weight} ${port} ${target}`;
+                }
+                return data.trim().toLowerCase();
+            default:
+                return data.trim();
+        }
     }
 
     private static getBestResult(
@@ -474,31 +577,76 @@ class DoHService {
     ): DoHServerResponse | undefined {
         if (results.length === 0) return undefined;
 
-        // 优先选择与共识一致且响应时间最快的结果
+        // 标准化共识答案用于比较
         const consensusKey = consensus
-            .map((a) => a.data)
+            .map((a) => `${a.type}:${this.normalizeData(a.data, a.type)}`)
             .sort()
-            .join(",");
+            .join("|");
 
-        const consensusResults = results.filter((result) => {
-            if (!result.answers || result.answers.length === 0) return false;
-            const resultKey = result.answers
-                .map((a) => a.data)
-                .sort()
-                .join(",");
-            return resultKey === consensusKey;
+        // 评分每个结果
+        const scoredResults = results.map(result => {
+            let score = 0;
+            
+            if (result.answers && result.answers.length > 0) {
+                const normalizedAnswers = this.normalizeAnswers(result.answers);
+                const resultKey = normalizedAnswers
+                    .map((a) => `${a.type}:${a.data}`)
+                    .sort()
+                    .join("|");
+
+                // 共识匹配度：完全匹配得满分，部分匹配按比例计分
+                if (resultKey === consensusKey) {
+                    score += 50; // 完全匹配共识
+                } else {
+                    // 计算部分匹配度
+                    const consensusSet = new Set(consensusKey.split("|"));
+                    const resultSet = new Set(resultKey.split("|"));
+                    const intersection = new Set([...consensusSet].filter(x => resultSet.has(x)));
+                    const union = new Set([...consensusSet, ...resultSet]);
+                    score += (intersection.size / union.size) * 30; // 部分匹配
+                }
+
+                // 详细度分数：记录数量越多分数越高
+                score += Math.min(normalizedAnswers.length * 5, 20);
+
+                // 数据质量分数：TTL合理性、格式标准性
+                const avgTTL = normalizedAnswers.reduce((sum, a) => sum + a.ttl, 0) / normalizedAnswers.length;
+                if (avgTTL > 60 && avgTTL < 86400) { // 合理的TTL范围
+                    score += 10;
+                }
+            }
+
+            // 响应时间分数：越快分数越高
+            const responseTime = result.responseTime || 10000;
+            score += Math.max(0, 20 - (responseTime / 100)); // 2秒内满分，超时扣分
+
+            // 服务器可靠性分数（根据历史表现，这里简化为固定值）
+            const reliabilityBonus = this.getServerReliabilityBonus(result.serverName);
+            score += reliabilityBonus;
+
+            return { ...result, score };
         });
 
-        if (consensusResults.length > 0) {
-            return consensusResults.reduce((fastest, current) =>
-                (current.responseTime || 0) < (fastest.responseTime || 0) ? current : fastest,
-            );
-        }
-
-        // 如果没有共识，返回响应时间最快的结果
-        return results.reduce((fastest, current) =>
-            (current.responseTime || 0) < (fastest.responseTime || 0) ? current : fastest,
+        // 返回分数最高的结果
+        return scoredResults.reduce((best, current) => 
+            current.score > best.score ? current : best
         );
+    }
+
+    // 服务器可靠性加分（可以根据实际情况调整）
+    private static getServerReliabilityBonus(serverName: string): number {
+        const bonusMap: Record<string, number> = {
+            'Cloudflare': 5,
+            'Google': 5,
+            'Quad9': 4,
+            'DNSPod': 4,
+            'Alidns': 3,
+            'DNS.SB': 3,
+            'OpenDNS': 3,
+            'AdGuard': 2,
+            '360': 2,
+        };
+        return bonusMap[serverName] || 0;
     }
 }
 
@@ -554,7 +702,7 @@ export class DoHMCP extends McpAgent {
                                     type: "text",
                                     text: `DNS查询结果：\n域名: ${domain}\n类型: ${type}\n\n答案记录:\n${results.bestResult.answers
                                         .map((a) => `- ${a.data} (TTL: ${a.ttl}s)`)
-                                        .join("\n")}\n\n响应服务器: ${results.bestResult.serverName}\n响应时间: ${results.bestResult.responseTime}ms\n成功/总计服务器: ${results.success.length}/${results.total}`,
+                                        .join("\n")}\n\n响应服务器: ${results.bestResult.serverName}\n响应时间: ${results.bestResult.responseTime}ms\n成功/总计服务器: ${results.success.length}/${results.total}\n\n质量评分:\n- 共识度: ${(results.consensusScore! * 100).toFixed(1)}%\n- 详细度: ${(results.detailScore! * 100).toFixed(1)}%\n- 共识记录数: ${results.consensus?.length || 0}`,
                                 },
                             ],
                         };
@@ -606,7 +754,7 @@ export class DoHMCP extends McpAgent {
                         timeout,
                     );
 
-                    let debugText = `DNS调试信息：\n域名: ${domain}\n类型: ${type}\n总计服务器: ${results.total}\n\n`;
+                    let debugText = `DNS调试信息：\n域名: ${domain}\n类型: ${type}\n总计服务器: ${results.total}\n\n=== 质量评分 ===\n共识度: ${(results.consensusScore! * 100).toFixed(1)}% | 详细度: ${(results.detailScore! * 100).toFixed(1)}%\n共识记录数: ${results.consensus?.length || 0}\n\n`;
 
                     debugText += "=== 成功的服务器 ===\n";
                     if (results.success.length > 0) {
@@ -803,6 +951,8 @@ export default {
                 serverName: results.bestResult?.serverName || null,
                 responseTime: results.bestResult?.responseTime || null,
                 consensus: results.consensus || [],
+                consensusScore: results.consensusScore || 0,
+                detailScore: results.detailScore || 0,
                 totalServers: results.total,
                 successfulServers: results.success.length,
                 failedServers: results.failed.length,
@@ -873,6 +1023,8 @@ export default {
                     failed: results.failed,
                 },
                 consensus: results.consensus || [],
+                consensusScore: results.consensusScore || 0,
+                detailScore: results.detailScore || 0,
                 totalServers: results.total,
                 successfulServers: results.success.length,
                 failedServers: results.failed.length,

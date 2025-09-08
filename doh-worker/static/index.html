@@ -461,6 +461,14 @@
                         <div class="stat-number">${data.serverName || 'Unknown'}</div>
                         <div class="stat-label">最佳服务器</div>
                     </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${((data.consensusScore || 0) * 100).toFixed(1)}%</div>
+                        <div class="stat-label">共识度</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${((data.detailScore || 0) * 100).toFixed(1)}%</div>
+                        <div class="stat-label">详细度</div>
+                    </div>
                 </div>
 
                 <div class="result-card">
@@ -509,6 +517,14 @@
                     <div class="stat-card">
                         <div class="stat-number">${totalCount}</div>
                         <div class="stat-label">总计服务器</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${((data.consensusScore || 0) * 100).toFixed(1)}%</div>
+                        <div class="stat-label">共识度</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${((data.detailScore || 0) * 100).toFixed(1)}%</div>
+                        <div class="stat-label">详细度</div>
                     </div>
                 </div>
             `;
